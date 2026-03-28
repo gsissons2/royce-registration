@@ -1,43 +1,70 @@
-import { Redis } from '@upstash/redis'
+import { put, list, del, head } from '@vercel/blob'
 import { RegistrationData, SignedRegistration } from '@/types/registration'
 
-// Initialize Redis client
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL || '',
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || '',
-})
-
-const REGISTRATIONS_KEY = 'registrations'
+const REGISTRATIONS_PREFIX = 'registrations/'
 
 export async function saveRegistration(data: RegistrationData | SignedRegistration): Promise<void> {
-  await redis.hset(REGISTRATIONS_KEY, { [data.id]: JSON.stringify(data) })
+  const path = `${REGISTRATIONS_PREFIX}${data.id}.json`
+  await put(path, JSON.stringify(data), {
+    access: 'public',
+    addRandomSuffix: false,
+  })
 }
 
 export async function getRegistration(id: string): Promise<RegistrationData | null> {
-  const data = await redis.hget(REGISTRATIONS_KEY, id)
-  if (!data) return null
-  return typeof data === 'string' ? JSON.parse(data) : data as RegistrationData
+  try {
+    const path = `${REGISTRATIONS_PREFIX}${id}.json`
+    const { blobs } = await list({ prefix: path })
+    
+    if (blobs.length === 0) return null
+    
+    const response = await fetch(blobs[0].url)
+    if (!response.ok) return null
+    
+    return await response.json()
+  } catch {
+    return null
+  }
 }
 
 export async function listRegistrations(): Promise<RegistrationData[]> {
-  const all = await redis.hgetall(REGISTRATIONS_KEY)
-  if (!all) return []
-  
-  const registrations = Object.values(all).map(item => {
-    if (typeof item === 'string') {
-      return JSON.parse(item)
-    }
-    return item
-  }) as RegistrationData[]
-  
-  return registrations.sort((a, b) => 
-    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  )
+  try {
+    const { blobs } = await list({ prefix: REGISTRATIONS_PREFIX })
+    
+    const registrations = await Promise.all(
+      blobs.map(async (blob) => {
+        try {
+          const response = await fetch(blob.url)
+          if (!response.ok) return null
+          return await response.json()
+        } catch {
+          return null
+        }
+      })
+    )
+    
+    return registrations
+      .filter((r): r is RegistrationData => r !== null)
+      .sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      )
+  } catch {
+    return []
+  }
 }
 
 export async function deleteRegistration(id: string): Promise<boolean> {
-  const result = await redis.hdel(REGISTRATIONS_KEY, id)
-  return result > 0
+  try {
+    const path = `${REGISTRATIONS_PREFIX}${id}.json`
+    const { blobs } = await list({ prefix: path })
+    
+    if (blobs.length === 0) return false
+    
+    await del(blobs[0].url)
+    return true
+  } catch {
+    return false
+  }
 }
 
 export async function signRegistration(
@@ -60,5 +87,5 @@ export async function signRegistration(
   return signed
 }
 
-// For backwards compatibility, no-op
+// For backwards compatibility
 export async function ensureDataDir() {}

@@ -1,4 +1,5 @@
 import { RegistrationData, ParsedPDFResult } from '@/types/registration'
+import { extractText } from 'unpdf'
 
 function extractField(text: string, patterns: RegExp[]): string | null {
   for (const pattern of patterns) {
@@ -21,30 +22,7 @@ function extractNumber(text: string, patterns: RegExp[]): number {
 
 export async function parsePDF(buffer: Buffer): Promise<ParsedPDFResult> {
   try {
-    // Use legacy build for Node.js compatibility (no DOMMatrix)
-    const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs')
-    
-    const loadingTask = pdfjsLib.getDocument({
-      data: new Uint8Array(buffer),
-      useSystemFonts: true,
-    })
-    
-    const pdf = await loadingTask.promise
-    let fullText = ''
-    
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i)
-      const textContent = await page.getTextContent()
-      const pageText = textContent.items
-        .map((item: unknown) => {
-          const textItem = item as { str?: string }
-          return textItem.str || ''
-        })
-        .join(' ')
-      fullText += pageText + ' '
-    }
-    
-    const text = fullText.trim()
+    const { text } = await extractText(buffer, { mergePages: true })
     const normalizedText = text.replace(/\s+/g, ' ')
     
     console.log('Extracted text:', normalizedText.substring(0, 500))
@@ -109,27 +87,6 @@ export async function parsePDF(buffer: Buffer): Promise<ParsedPDFResult> {
 }
 
 export async function extractPDFText(buffer: Buffer): Promise<string> {
-  const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs')
-  
-  const loadingTask = pdfjsLib.getDocument({
-    data: new Uint8Array(buffer),
-    useSystemFonts: true,
-  })
-  
-  const pdf = await loadingTask.promise
-  let fullText = ''
-  
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i)
-    const textContent = await page.getTextContent()
-    const pageText = textContent.items
-      .map((item: unknown) => {
-        const textItem = item as { str?: string }
-        return textItem.str || ''
-      })
-      .join(' ')
-    fullText += pageText + ' '
-  }
-  
-  return fullText.trim()
+  const { text } = await extractText(buffer, { mergePages: true })
+  return text
 }

@@ -19,9 +19,11 @@ export function Signature({
   const signaturePadRef = useRef<SignaturePad | null>(null)
   const [isEmpty, setIsEmpty] = useState(true)
   const [isDark, setIsDark] = useState(false)
+  const [mounted, setMounted] = useState(false)
 
   // Detect dark mode
   useEffect(() => {
+    setMounted(true)
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
     setIsDark(mediaQuery.matches)
 
@@ -30,27 +32,23 @@ export function Signature({
     return () => mediaQuery.removeEventListener('change', handler)
   }, [])
 
-  // Update pen color when theme changes
+  // Update pen color when theme changes (WITHOUT re-creating SignaturePad)
   useEffect(() => {
-    if (signaturePadRef.current) {
+    if (signaturePadRef.current && mounted) {
       signaturePadRef.current.penColor = isDark ? 'rgb(255, 255, 255)' : 'rgb(0, 0, 0)'
     }
-  }, [isDark])
+  }, [isDark, mounted])
 
-  // Resize canvas to match container
+  // Resize canvas
   const resizeCanvas = useCallback(() => {
     const canvas = canvasRef.current
     const container = containerRef.current
     if (!canvas || !container) return
 
-    // Save current signature data
     const data = signaturePadRef.current?.toData()
-    
-    // Get container dimensions
     const rect = container.getBoundingClientRect()
-    
-    // High-DPI support
     const ratio = Math.max(window.devicePixelRatio || 1, 1)
+    
     canvas.width = rect.width * ratio
     canvas.height = rect.height * ratio
     canvas.style.width = `${rect.width}px`
@@ -59,49 +57,43 @@ export function Signature({
     const ctx = canvas.getContext('2d')
     ctx?.scale(ratio, ratio)
     
-    // Restore signature data if any
     if (data && data.length > 0 && signaturePadRef.current) {
       signaturePadRef.current.fromData(data)
     }
   }, [])
 
-  // Initialize SignaturePad
+  // Initialize SignaturePad ONCE (no isDark in dependencies)
   useEffect(() => {
-    if (!canvasRef.current || !containerRef.current) return
+    if (!canvasRef.current || !containerRef.current || !mounted) return
 
     const canvas = canvasRef.current
-    
-    // Initial resize
     resizeCanvas()
-    
-    // Prevent touch scroll/zoom
     canvas.style.touchAction = 'none'
+
+    const initialDark = window.matchMedia('(prefers-color-scheme: dark)').matches
 
     signaturePadRef.current = new SignaturePad(canvas, {
       minWidth: 0.5,
       maxWidth: 2.5,
-      penColor: isDark ? 'rgb(255, 255, 255)' : 'rgb(0, 0, 0)',
+      penColor: initialDark ? 'rgb(255, 255, 255)' : 'rgb(0, 0, 0)',
       velocityFilterWeight: 0.7,
     })
 
-    // Handle stroke begin - hide placeholder
     signaturePadRef.current.addEventListener('beginStroke', () => {
       setIsEmpty(false)
     })
 
-    // Handle stroke end - emit signature data
     signaturePadRef.current.addEventListener('endStroke', () => {
       onChange(signaturePadRef.current?.toDataURL() || null)
     })
 
-    // Handle window resize
     window.addEventListener('resize', resizeCanvas)
 
     return () => {
       signaturePadRef.current?.off()
       window.removeEventListener('resize', resizeCanvas)
     }
-  }, [onChange, resizeCanvas, isDark])
+  }, [onChange, resizeCanvas, mounted])
 
   const clear = () => {
     signaturePadRef.current?.clear()
@@ -109,13 +101,13 @@ export function Signature({
     onChange(null)
   }
 
+  if (!mounted) {
+    return <div className={className}><div className="w-full aspect-[3/1] min-h-[120px] bg-neutral-100 dark:bg-neutral-800 rounded-lg" /></div>
+  }
+
   return (
     <div className={className}>
-      <div 
-        ref={containerRef}
-        className="relative w-full aspect-[3/1] min-h-[120px]"
-      >
-        {/* Placeholder text */}
+      <div ref={containerRef} className="relative w-full aspect-[3/1] min-h-[120px]">
         {isEmpty && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <span className="text-neutral-400 dark:text-neutral-500 text-lg italic select-none">
@@ -123,15 +115,11 @@ export function Signature({
             </span>
           </div>
         )}
-        
-        {/* Signature canvas */}
         <canvas
           ref={canvasRef}
           className="absolute inset-0 w-full h-full border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 cursor-crosshair"
         />
       </div>
-      
-      {/* Clear button */}
       <button
         type="button"
         onClick={clear}

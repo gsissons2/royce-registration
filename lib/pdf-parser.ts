@@ -1,7 +1,9 @@
 import { RegistrationData, ParsedPDFResult } from '@/types/registration'
+import * as pdfjsLib from 'pdfjs-dist'
+import type { TextItem } from 'pdfjs-dist/types/src/display/api'
 
-// @ts-expect-error - pdf-parse is a CommonJS module
-import pdfParse from 'pdf-parse'
+// Set worker source for pdfjs
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
 
 /**
  * Extract text patterns from PDF content
@@ -26,12 +28,32 @@ function extractNumber(text: string, patterns: RegExp[]): number {
 }
 
 /**
+ * Extract text from PDF using pdfjs-dist
+ */
+async function extractTextFromPDF(buffer: Buffer): Promise<string> {
+  const data = new Uint8Array(buffer)
+  const pdf = await pdfjsLib.getDocument({ data }).promise
+  
+  let fullText = ''
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i)
+    const textContent = await page.getTextContent()
+    const pageText = textContent.items
+      .filter((item): item is TextItem => 'str' in item)
+      .map((item) => item.str)
+      .join(' ')
+    fullText += pageText + ' '
+  }
+  
+  return fullText.trim()
+}
+
+/**
  * Parse PDF buffer and extract registration data
  */
 export async function parsePDF(buffer: Buffer): Promise<ParsedPDFResult> {
   try {
-    const data = await pdfParse(buffer)
-    const text = data.text
+    const text = await extractTextFromPDF(buffer)
     
     const normalizedText = text.replace(/\s+/g, ' ')
     
@@ -98,6 +120,5 @@ export async function parsePDF(buffer: Buffer): Promise<ParsedPDFResult> {
  * Extract raw text from PDF for debugging
  */
 export async function extractPDFText(buffer: Buffer): Promise<string> {
-  const data = await pdfParse(buffer)
-  return data.text
+  return extractTextFromPDF(buffer)
 }

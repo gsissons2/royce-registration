@@ -1,11 +1,5 @@
 import { RegistrationData, ParsedPDFResult } from '@/types/registration'
 
-// Use the legacy build for Node.js compatibility
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs'
-
-/**
- * Extract text patterns from PDF content
- */
 function extractField(text: string, patterns: RegExp[]): string | null {
   for (const pattern of patterns) {
     const match = text.match(pattern)
@@ -25,37 +19,35 @@ function extractNumber(text: string, patterns: RegExp[]): number {
   return 0
 }
 
-interface PDFTextItem {
-  str?: string
-}
-
-/**
- * Extract text from PDF using pdfjs-dist
- */
-async function extractTextFromPDF(buffer: Buffer): Promise<string> {
-  const data = new Uint8Array(buffer)
-  const pdf = await pdfjsLib.getDocument({ data }).promise
-  
-  let fullText = ''
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i)
-    const textContent = await page.getTextContent()
-    const pageText = textContent.items
-      .map((item: unknown) => (item as PDFTextItem).str || '')
-      .join(' ')
-    fullText += pageText + ' '
-  }
-  
-  return fullText.trim()
-}
-
-/**
- * Parse PDF buffer and extract registration data
- */
 export async function parsePDF(buffer: Buffer): Promise<ParsedPDFResult> {
   try {
-    const text = await extractTextFromPDF(buffer)
+    // Dynamically import pdfjs-dist
+    const pdfjsLib = await import('pdfjs-dist')
     
+    // Configure the worker - use CDN for reliability
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 
+      `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.mjs`
+    
+    const loadingTask = pdfjsLib.getDocument({
+      data: new Uint8Array(buffer),
+    })
+    
+    const pdf = await loadingTask.promise
+    let fullText = ''
+    
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i)
+      const textContent = await page.getTextContent()
+      const pageText = textContent.items
+        .map((item: unknown) => {
+          const textItem = item as { str?: string }
+          return textItem.str || ''
+        })
+        .join(' ')
+      fullText += pageText + ' '
+    }
+    
+    const text = fullText.trim()
     const normalizedText = text.replace(/\s+/g, ' ')
     
     const guestName = extractField(normalizedText, [
@@ -117,9 +109,29 @@ export async function parsePDF(buffer: Buffer): Promise<ParsedPDFResult> {
   }
 }
 
-/**
- * Extract raw text from PDF for debugging
- */
 export async function extractPDFText(buffer: Buffer): Promise<string> {
-  return extractTextFromPDF(buffer)
+  const pdfjsLib = await import('pdfjs-dist')
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 
+    `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.mjs`
+  
+  const loadingTask = pdfjsLib.getDocument({
+    data: new Uint8Array(buffer),
+  })
+  
+  const pdf = await loadingTask.promise
+  let fullText = ''
+  
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i)
+    const textContent = await page.getTextContent()
+    const pageText = textContent.items
+      .map((item: unknown) => {
+        const textItem = item as { str?: string }
+        return textItem.str || ''
+      })
+      .join(' ')
+    fullText += pageText + ' '
+  }
+  
+  return fullText.trim()
 }

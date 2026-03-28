@@ -13,6 +13,7 @@ export interface RegistrationData {
   children: number
   createdAt: string
   status: 'pending' | 'signed'
+  isTemplate?: boolean // True if PDF was unfilled template with placeholders
 }
 
 export interface SignedRegistration extends RegistrationData {

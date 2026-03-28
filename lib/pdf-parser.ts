@@ -1,21 +1,53 @@
 import { RegistrationData, ParsedPDFResult } from '@/types/registration'
 import { extractText } from 'unpdf'
 
-function extractField(text: string, patterns: RegExp[]): string | null {
-  for (const pattern of patterns) {
-    const match = text.match(pattern)
-    if (match && match[1]) {
-      return match[1].trim()
+function extractField(text: string, label: string): string {
+  // Match "Label: value" up to the next label or end
+  const pattern = new RegExp(
+    `${label}:\\s*([^«][^:]*?)(?=\\s+(?:Contact|Email|Reservation|Arrival|Departure|Number of|Room|Adults|Children|Policies|$))`,
+    'i'
+  )
+  const match = text.match(pattern)
+  if (match && match[1]) {
+    const value = match[1].trim()
+    // Skip if it's a mail-merge placeholder
+    if (value.startsWith('«') || value.startsWith('&lt;')) {
+      return ''
     }
+    return value
   }
-  return null
+  return ''
 }
 
-function extractNumber(text: string, patterns: RegExp[]): number {
-  const value = extractField(text, patterns)
-  if (value) {
-    const num = parseInt(value, 10)
-    return isNaN(num) ? 0 : num
+function extractSimpleField(text: string, label: string): string {
+  // Simpler extraction for fields followed by specific next labels
+  const pattern = new RegExp(`${label}:\\s*([^«\\n]+?)(?=\\s*(?:[A-Z][a-z]+:|$))`, 'i')
+  const match = text.match(pattern)
+  if (match && match[1]) {
+    const value = match[1].trim()
+    if (value.startsWith('«') || value.startsWith('&lt;')) {
+      return ''
+    }
+    return value
+  }
+  return ''
+}
+
+function extractNumber(text: string, label: string): number {
+  const pattern = new RegExp(`${label}:\\s*(\\d+)`, 'i')
+  const match = text.match(pattern)
+  if (match && match[1]) {
+    return parseInt(match[1], 10)
+  }
+  return 0
+}
+
+function extractGuestsCount(text: string, type: 'Adults' | 'Children'): number {
+  // Handle "Adults: 2, Children: 0" format
+  const pattern = new RegExp(`${type}:\\s*(\\d+)`, 'i')
+  const match = text.match(pattern)
+  if (match && match[1]) {
+    return parseInt(match[1], 10)
   }
   return 0
 }
@@ -23,41 +55,29 @@ function extractNumber(text: string, patterns: RegExp[]): number {
 export async function parsePDF(buffer: Buffer): Promise<ParsedPDFResult> {
   try {
     const { text } = await extractText(new Uint8Array(buffer), { mergePages: true })
-    const normalizedText = text.replace(/\s+/g, ' ')
+    const normalizedText = text.replace(/\s+/g, ' ').trim()
     
-    console.log('Extracted text:', normalizedText.substring(0, 500))
+    console.log('Extracted text (first 800 chars):', normalizedText.substring(0, 800))
     
-    const guestName = extractField(normalizedText, [
-      /(?:Guest\s*Name|Name)\s*[:\-]?\s*([A-Za-z\s\.]+?)(?=\s*(?:Mobile|Phone|Email|Contact|$))/i,
-      /(?:Mr|Mrs|Ms|Dr|Miss)\.?\s+([A-Za-z\s]+?)(?=\s*(?:Mobile|Phone|Email|$))/i,
-    ]) || ''
+    // Check if this is an unfilled template
+    const isTemplate = normalizedText.includes('«') || normalizedText.includes('&lt;&lt;')
     
-    const contactNumber = extractField(normalizedText, [
-      /(?:Mobile|Phone|Contact)\s*[:\-]?\s*([\d\s\+\-\(\)]+?)(?=\s*(?:Email|$|\s{2,}))/i,
-    ]) || ''
+    if (isTemplate) {
+      console.log('Warning: PDF appears to be an unfilled template with placeholders')
+    }
     
-    const email = extractField(normalizedText, [
-      /(?:Email|E-mail)\s*[:\-]?\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i,
-      /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i,
-    ]) || ''
-    
-    const reservationNumber = extractField(normalizedText, [
-      /(?:Reservation\s*(?:No|Number|#)?|Res\.?\s*No\.?)\s*[:\-]?\s*(\w+)/i,
-    ]) || ''
-    
-    const arrivalDate = extractField(normalizedText, [
-      /(?:Arrival|Check[\s-]?in)\s*(?:Date)?\s*[:\-]?\s*(\d{1,2}[\s\/\-]\w+[\s\/\-]\d{2,4}|\w+\s+\d{1,2},?\s+\d{4})/i,
-    ]) || ''
-    
-    const departureDate = extractField(normalizedText, [
-      /(?:Departure|Check[\s-]?out)\s*(?:Date)?\s*[:\-]?\s*(\d{1,2}[\s\/\-]\w+[\s\/\-]\d{2,4}|\w+\s+\d{1,2},?\s+\d{4})/i,
-    ]) || ''
-    
-    const nights = extractNumber(normalizedText, [/(?:Nights?)\s*[:\-]?\s*(\d+)/i])
-    const roomType = extractField(normalizedText, [/(?:Room\s*Type|Category)\s*[:\-]?\s*([A-Za-z\s]+?)(?=\s*(?:Room|$))/i]) || ''
-    const roomNumber = extractField(normalizedText, [/(?:Room\s*(?:No|Number)?|Bed)\s*[:\-]?\s*(\d+[A-Za-z]?)/i]) || ''
-    const adults = extractNumber(normalizedText, [/(?:Adults?)\s*[:\-]?\s*(\d+)/i])
-    const children = extractNumber(normalizedText, [/(?:Children)\s*[:\-]?\s*(\d+)/i])
+    // Extract fields based on Royce registration card format
+    const guestName = extractField(normalizedText, 'Guest Name')
+    const contactNumber = extractSimpleField(normalizedText, 'Contact Number')
+    const email = extractSimpleField(normalizedText, 'Email Address')
+    const reservationNumber = extractSimpleField(normalizedText, 'Reservation Number')
+    const arrivalDate = extractSimpleField(normalizedText, 'Arrival Date')
+    const departureDate = extractSimpleField(normalizedText, 'Departure Date')
+    const nights = extractNumber(normalizedText, 'Number of Nights')
+    const roomType = extractSimpleField(normalizedText, 'Room Type')
+    const roomNumber = extractSimpleField(normalizedText, 'Room Number')
+    const adults = extractGuestsCount(normalizedText, 'Adults')
+    const children = extractGuestsCount(normalizedText, 'Children')
     
     const registrationData: RegistrationData = {
       id: crypto.randomUUID(),
@@ -74,6 +94,7 @@ export async function parsePDF(buffer: Buffer): Promise<ParsedPDFResult> {
       children,
       createdAt: new Date().toISOString(),
       status: 'pending',
+      isTemplate, // Flag to indicate if this was an unfilled template
     }
     
     return { success: true, data: registrationData }

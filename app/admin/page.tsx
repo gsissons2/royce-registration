@@ -13,21 +13,37 @@ export default function AdminPage() {
 
   const fetchRegistrations = useCallback(async () => {
     try {
-      const res = await fetch('/api/registrations')
+      setError(null)
+      const res = await fetch('/api/registrations', {
+        cache: 'no-store',
+        headers: {
+          'Accept': 'application/json',
+        },
+      })
+      
+      const contentType = res.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error('Non-JSON response:', contentType)
+        const text = await res.text()
+        console.error('Response body:', text.substring(0, 200))
+        setError('Server returned non-JSON response')
+        setRegistrations([])
+        return
+      }
+      
       const data = await res.json()
       
-      // Ensure we always have an array
       if (Array.isArray(data)) {
         setRegistrations(data)
       } else if (data.error) {
-        console.error('API error:', data.error)
+        setError(data.error)
         setRegistrations([])
       } else {
         setRegistrations([])
       }
     } catch (err) {
       console.error('Failed to fetch registrations:', err)
-      setError('Failed to load registrations')
+      setError(err instanceof Error ? err.message : 'Failed to load registrations')
       setRegistrations([])
     } finally {
       setLoading(false)
@@ -62,7 +78,6 @@ export default function AdminPage() {
         throw new Error(data.error || 'Upload failed')
       }
 
-      // Save the registration
       await fetch('/api/registrations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -109,14 +124,12 @@ export default function AdminPage() {
     }
   }
 
-  // Safe filtering with fallback to empty array
   const pending = Array.isArray(registrations) ? registrations.filter(r => r.status === 'pending') : []
   const signed = Array.isArray(registrations) ? registrations.filter(r => r.status === 'signed') : []
 
   return (
     <div className="min-h-screen bg-background text-foreground p-6 lg:p-8">
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <svg viewBox="0 0 688 308" className="h-10 text-foreground" fill="currentColor">
             <path d="M39.06 228.8v-25.27h28.1c9.67 0 14.95 5.4 14.95 12.71 0 7.3-5.28 12.56-14.95 12.56h-28.1zm47.01 29.36c-6.75-7.37-16.96-9.01-22.92-9.29l5.4-.05c24.17 0 36.84-12.13 36.84-32.58 0-20.45-14.66-32.88-37.32-32.88H15.79v107.39h23.27v-41.93h15.11l30.36 41.93h27.2l-25.66-32.59zM209.63 292.94c-32.78 0-58.92-23.08-58.92-56.25 0-33.31 26.14-56.25 58.92-56.25s58.93 22.94 58.93 56.25c0 33.17-26.14 56.25-58.93 56.25m0-92.34c-21.6 0-35.65 14.9-35.65 36.09 0 21.04 14.05 36.09 35.65 36.09 21.61 0 35.66-15.05 35.66-36.09 0-21.19-14.05-36.09-35.66-36.09M365.26 290.75h-23.27v-43.54l-43.51-63.85h26.89s18.56 28.38 20.53 31.18c7.87 11.21 7.73 29.89 7.73 29.89s.72-19.2 7.63-29.45c1.73-2.56 21.07-31.62 21.07-31.62h26.74l-43.81 63.56v43.83zM497.16 292.94c-33.99 0-58.17-23.38-58.17-56.4 0-33.9 25.68-56.1 58.17-56.1 21.91 0 41.7 10.08 50.76 28.79l-19.03 12.13c-4.23-12.13-16.17-20.76-32.03-20.76-20.55 0-34.6 14.32-34.6 36.09 0 21.19 13.45 36.09 34.3 36.09 15.41 0 28.86-8.04 32.93-21.19l19.19 12.13c-9.97 18.85-28.71 29.22-51.52 29.22M593.25 183.36v107.39h77.95v-20.17h-54.69v-23.66h50.31v-19.87h-50.31v-23.52h54.39v-20.17z"/>
@@ -124,21 +137,18 @@ export default function AdminPage() {
           <h1 className="font-serif text-2xl">Registration Management</h1>
         </div>
 
-        {/* Error state */}
         {error && (
           <div className="mb-6 p-4 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">
             {error}
           </div>
         )}
 
-        {/* Message */}
         {message && (
           <div className={`mb-6 p-4 rounded-lg ${message.type === 'success' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'}`}>
             {message.text}
           </div>
         )}
 
-        {/* Upload Zone */}
         <div
           onDragOver={(e) => { e.preventDefault(); setDragActive(true) }}
           onDragLeave={() => setDragActive(false)}
@@ -147,13 +157,7 @@ export default function AdminPage() {
             ${dragActive ? 'border-accent bg-accent/10' : 'border-neutral-300 dark:border-neutral-600'}
             ${uploading ? 'opacity-50 pointer-events-none' : 'cursor-pointer hover:border-accent'}`}
         >
-          <input
-            type="file"
-            accept=".pdf"
-            onChange={handleFileInput}
-            className="hidden"
-            id="file-upload"
-          />
+          <input type="file" accept=".pdf" onChange={handleFileInput} className="hidden" id="file-upload" />
           <label htmlFor="file-upload" className="cursor-pointer">
             <svg className="w-12 h-12 mx-auto text-muted mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
@@ -163,7 +167,6 @@ export default function AdminPage() {
           </label>
         </div>
 
-        {/* Pending Registrations */}
         <div className="mb-8">
           <h2 className="font-serif text-lg text-accent mb-4">Pending Registrations ({pending.length})</h2>
           {loading ? (
@@ -179,18 +182,8 @@ export default function AdminPage() {
                     <p className="text-sm text-muted">Room {reg.roomNumber} · Res #{reg.reservationNumber}</p>
                   </div>
                   <div className="flex gap-2">
-                    <button
-                      onClick={() => copyLink(reg.id)}
-                      className="px-3 py-1.5 text-sm bg-accent text-white rounded hover:opacity-90"
-                    >
-                      Copy Link
-                    </button>
-                    <button
-                      onClick={() => deleteRegistration(reg.id)}
-                      className="px-3 py-1.5 text-sm bg-red-500 text-white rounded hover:opacity-90"
-                    >
-                      Delete
-                    </button>
+                    <button onClick={() => copyLink(reg.id)} className="px-3 py-1.5 text-sm bg-accent text-white rounded hover:opacity-90">Copy Link</button>
+                    <button onClick={() => deleteRegistration(reg.id)} className="px-3 py-1.5 text-sm bg-red-500 text-white rounded hover:opacity-90">Delete</button>
                   </div>
                 </div>
               ))}
@@ -198,7 +191,6 @@ export default function AdminPage() {
           )}
         </div>
 
-        {/* Signed Registrations */}
         <div>
           <h2 className="font-serif text-lg text-accent mb-4">Signed Today ({signed.length})</h2>
           {signed.length === 0 ? (

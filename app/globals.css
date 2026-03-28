@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@400;500;600;700&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -30,22 +28,19 @@ html, body {
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.font-serif {
+  font-family: Georgia, 'Times New Roman', serif;
 }
 
 /* Prevent text selection during signing */
 .no-select {
   -webkit-user-select: none;
   user-select: none;
-}
-
-/* iPad landscape optimization */
-@media (min-width: 1024px) and (orientation: landscape) {
-  html {
-    font-size: 16px;
-  }
 }
 
 /* Signature canvas styling */

@@ -1,9 +1,7 @@
 import { RegistrationData, ParsedPDFResult } from '@/types/registration'
-import * as pdfjsLib from 'pdfjs-dist'
-import type { TextItem } from 'pdfjs-dist/types/src/display/api'
 
-// Set worker source for pdfjs
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+// Use the legacy build for Node.js compatibility
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs'
 
 /**
  * Extract text patterns from PDF content
@@ -39,8 +37,11 @@ async function extractTextFromPDF(buffer: Buffer): Promise<string> {
     const page = await pdf.getPage(i)
     const textContent = await page.getTextContent()
     const pageText = textContent.items
-      .filter((item): item is TextItem => 'str' in item)
-      .map((item) => item.str)
+      .map((item) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const textItem = item as any
+        return textItem.str || ''
+      })
       .join(' ')
     fullText += pageText + ' '
   }

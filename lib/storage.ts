@@ -1,9 +1,22 @@
-import { put, list, del, head } from '@vercel/blob'
+import { put, list, del } from '@vercel/blob'
 import { RegistrationData, SignedRegistration } from '@/types/registration'
 
 const REGISTRATIONS_PREFIX = 'registrations/'
 
+// Check if blob token is configured
+function checkBlobToken() {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    console.warn('BLOB_READ_WRITE_TOKEN not configured')
+    return false
+  }
+  return true
+}
+
 export async function saveRegistration(data: RegistrationData | SignedRegistration): Promise<void> {
+  if (!checkBlobToken()) {
+    throw new Error('Storage not configured')
+  }
+  
   const path = `${REGISTRATIONS_PREFIX}${data.id}.json`
   await put(path, JSON.stringify(data), {
     access: 'public',
@@ -12,6 +25,10 @@ export async function saveRegistration(data: RegistrationData | SignedRegistrati
 }
 
 export async function getRegistration(id: string): Promise<RegistrationData | null> {
+  if (!checkBlobToken()) {
+    return null
+  }
+  
   try {
     const path = `${REGISTRATIONS_PREFIX}${id}.json`
     const { blobs } = await list({ prefix: path })
@@ -22,12 +39,17 @@ export async function getRegistration(id: string): Promise<RegistrationData | nu
     if (!response.ok) return null
     
     return await response.json()
-  } catch {
+  } catch (error) {
+    console.error('Error getting registration:', error)
     return null
   }
 }
 
 export async function listRegistrations(): Promise<RegistrationData[]> {
+  if (!checkBlobToken()) {
+    return []
+  }
+  
   try {
     const { blobs } = await list({ prefix: REGISTRATIONS_PREFIX })
     
@@ -48,12 +70,17 @@ export async function listRegistrations(): Promise<RegistrationData[]> {
       .sort((a, b) => 
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       )
-  } catch {
+  } catch (error) {
+    console.error('Error listing registrations:', error)
     return []
   }
 }
 
 export async function deleteRegistration(id: string): Promise<boolean> {
+  if (!checkBlobToken()) {
+    return false
+  }
+  
   try {
     const path = `${REGISTRATIONS_PREFIX}${id}.json`
     const { blobs } = await list({ prefix: path })
@@ -62,7 +89,8 @@ export async function deleteRegistration(id: string): Promise<boolean> {
     
     await del(blobs[0].url)
     return true
-  } catch {
+  } catch (error) {
+    console.error('Error deleting registration:', error)
     return false
   }
 }
@@ -87,5 +115,4 @@ export async function signRegistration(
   return signed
 }
 
-// For backwards compatibility
 export async function ensureDataDir() {}

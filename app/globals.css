@@ -1,41 +1,54 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #faf9f7;
+  --foreground: #1a1a1a;
+  --accent: #b8860b;
+  --muted: #6b7280;
 }
 
 .dark {
   --background: #1a1a1a;
-  --foreground: #ededed;
+  --foreground: #f5f5f5;
+  --accent: #d4a853;
+  --muted: #9ca3af;
 }
 
-/* iPad landscape lock - prevent scroll/bounce */
 html, body {
   overflow: hidden;
   position: fixed;
   width: 100%;
   height: 100%;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* Prevent pull-to-refresh on mobile */
-body {
   overscroll-behavior: none;
+  -webkit-overflow-scrolling: none;
 }
 
-/* Disable text selection for signature areas */
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Prevent text selection during signing */
 .no-select {
   -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
   user-select: none;
-  -webkit-touch-callout: none;
 }
 
-/* Smooth transitions for theme switching */
-* {
-  transition: background-color 0.2s ease, color 0.2s ease;
+/* iPad landscape optimization */
+@media (min-width: 1024px) and (orientation: landscape) {
+  html {
+    font-size: 16px;
+  }
+}
+
+/* Signature canvas styling */
+canvas {
+  touch-action: none;
 }

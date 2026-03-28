@@ -25,6 +25,10 @@ function extractNumber(text: string, patterns: RegExp[]): number {
   return 0
 }
 
+interface PDFTextItem {
+  str?: string
+}
+
 /**
  * Extract text from PDF using pdfjs-dist
  */
@@ -37,11 +41,7 @@ async function extractTextFromPDF(buffer: Buffer): Promise<string> {
     const page = await pdf.getPage(i)
     const textContent = await page.getTextContent()
     const pageText = textContent.items
-      .map((item) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const textItem = item as any
-        return textItem.str || ''
-      })
+      .map((item: unknown) => (item as PDFTextItem).str || '')
       .join(' ')
     fullText += pageText + ' '
   }

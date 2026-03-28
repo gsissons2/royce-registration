@@ -6,6 +6,7 @@ import { RegistrationData } from '@/types/registration'
 export default function AdminPage() {
   const [registrations, setRegistrations] = useState<RegistrationData[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [dragActive, setDragActive] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
@@ -14,9 +15,20 @@ export default function AdminPage() {
     try {
       const res = await fetch('/api/registrations')
       const data = await res.json()
-      setRegistrations(data)
-    } catch {
-      console.error('Failed to fetch registrations')
+      
+      // Ensure we always have an array
+      if (Array.isArray(data)) {
+        setRegistrations(data)
+      } else if (data.error) {
+        console.error('API error:', data.error)
+        setRegistrations([])
+      } else {
+        setRegistrations([])
+      }
+    } catch (err) {
+      console.error('Failed to fetch registrations:', err)
+      setError('Failed to load registrations')
+      setRegistrations([])
     } finally {
       setLoading(false)
     }
@@ -97,8 +109,9 @@ export default function AdminPage() {
     }
   }
 
-  const pending = registrations.filter(r => r.status === 'pending')
-  const signed = registrations.filter(r => r.status === 'signed')
+  // Safe filtering with fallback to empty array
+  const pending = Array.isArray(registrations) ? registrations.filter(r => r.status === 'pending') : []
+  const signed = Array.isArray(registrations) ? registrations.filter(r => r.status === 'signed') : []
 
   return (
     <div className="min-h-screen bg-background text-foreground p-6 lg:p-8">
@@ -110,6 +123,13 @@ export default function AdminPage() {
           </svg>
           <h1 className="font-serif text-2xl">Registration Management</h1>
         </div>
+
+        {/* Error state */}
+        {error && (
+          <div className="mb-6 p-4 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">
+            {error}
+          </div>
+        )}
 
         {/* Message */}
         {message && (

@@ -22,7 +22,7 @@ function extractNumber(text: string, patterns: RegExp[]): number {
 
 export async function parsePDF(buffer: Buffer): Promise<ParsedPDFResult> {
   try {
-    const { text } = await extractText(buffer, { mergePages: true })
+    const { text } = await extractText(new Uint8Array(buffer), { mergePages: true })
     const normalizedText = text.replace(/\s+/g, ' ')
     
     console.log('Extracted text:', normalizedText.substring(0, 500))
@@ -87,6 +87,6 @@ export async function parsePDF(buffer: Buffer): Promise<ParsedPDFResult> {
 }
 
 export async function extractPDFText(buffer: Buffer): Promise<string> {
-  const { text } = await extractText(buffer, { mergePages: true })
+  const { text } = await extractText(new Uint8Array(buffer), { mergePages: true })
   return text
 }

@@ -21,15 +21,12 @@ function extractNumber(text: string, patterns: RegExp[]): number {
 
 export async function parsePDF(buffer: Buffer): Promise<ParsedPDFResult> {
   try {
-    // Dynamically import pdfjs-dist
-    const pdfjsLib = await import('pdfjs-dist')
-    
-    // Configure the worker - use CDN for reliability
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 
-      `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.mjs`
+    // Use legacy build for Node.js compatibility (no DOMMatrix)
+    const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs')
     
     const loadingTask = pdfjsLib.getDocument({
       data: new Uint8Array(buffer),
+      useSystemFonts: true,
     })
     
     const pdf = await loadingTask.promise
@@ -49,6 +46,8 @@ export async function parsePDF(buffer: Buffer): Promise<ParsedPDFResult> {
     
     const text = fullText.trim()
     const normalizedText = text.replace(/\s+/g, ' ')
+    
+    console.log('Extracted text:', normalizedText.substring(0, 500))
     
     const guestName = extractField(normalizedText, [
       /(?:Guest\s*Name|Name)\s*[:\-]?\s*([A-Za-z\s\.]+?)(?=\s*(?:Mobile|Phone|Email|Contact|$))/i,
@@ -110,12 +109,11 @@ export async function parsePDF(buffer: Buffer): Promise<ParsedPDFResult> {
 }
 
 export async function extractPDFText(buffer: Buffer): Promise<string> {
-  const pdfjsLib = await import('pdfjs-dist')
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 
-    `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.mjs`
+  const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs')
   
   const loadingTask = pdfjsLib.getDocument({
     data: new Uint8Array(buffer),
+    useSystemFonts: true,
   })
   
   const pdf = await loadingTask.promise
